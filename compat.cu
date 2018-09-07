@@ -98,6 +98,7 @@ void *CUDA_struct_free(CUDA_struct *parent){
 	}
 
 	parent->freeing = 1;
+	cudaMemcpy(parent->old_value, parent->value, parent->size, cudaMemcpyDeviceToHost);
 	child = parent->children;
 	while(child != (linked_list *) 0){
 		old_pointer = ((CUDA_child *) child->value)->old_pointer;
@@ -105,16 +106,12 @@ void *CUDA_struct_free(CUDA_struct *parent){
 		child_struct = ((CUDA_child *) child->value)->struct_var;
 		
 		CUDA_struct_free(child_struct);
-
 		*child_pointer = old_pointer;
-
 		free((CUDA_child *) child->value);
 		next_child = child->next;
 		free(child);
 		child = next_child;
 	}
-
-	cudaMemcpy(parent->old_value, parent->value, parent->size, cudaMemcpyDeviceToHost);
 
 	output = parent->old_value;
 	cudaFree(parent->value);
@@ -198,7 +195,8 @@ int main(){
 
 	printf("Test results: %d %d\n", t_device, t2_device);
 	printf("Expected    : 5 3\n");
-
+	printf("Accessing t2... Result: ");
+	printf("%d\n", t->child->x);
 	printf("Freeing t and t2...\n");
 
 	free(t);
