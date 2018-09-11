@@ -118,6 +118,102 @@ void *CUDA_struct_free(CUDA_struct *parent){
 	return output;
 }
 
+void _CUDA_struct_reset_freeing(CUDA_struct *parent){
+	linked_list *child;
+
+	if(!parent->freeing){
+		return;
+	}
+	parent->freeing = 0;
+	child = parent->children;
+	while(child != (linked_list *) 0){
+		_CUDA_struct_reset_freeing(((CUDA_child *) child->value)->struct_var);
+		child = child->next;
+	}
+}
+
+void *_CUDA_struct_pull(CUDA_struct *parent){
+	linked_list *child;
+	void **child_pointer;
+	void *old_pointer;
+	void *old_CUDA_pointer;
+	CUDA_struct *child_struct;
+	
+	if(!parent->allocated){
+		fprintf(stderr, "Error: the CUDA_struct was never compiled. Compile it with void *new_struct = CUDA_struct_compile(my_CUDA_struct_pointer);");
+		exit(1);
+	}
+
+	if(parent->freeing){
+		return parent->old_value;
+	}
+
+	parent->freeing = 1;
+	cudaMemcpy(parent->old_value, parent->value, parent->size, cudaMemcpyDeviceToHost);
+	
+	child = parent->children;
+	while(child != (linked_list *) 0){
+		old_pointer = ((CUDA_child *) child->value)->old_pointer;
+		child_pointer = ((CUDA_child *) child->value)->pointer;
+		child_struct = ((CUDA_child *) child->value)->struct_var;
+		
+		_CUDA_struct_pull(child_struct);
+		old_CUDA_pointer = *child_pointer;
+		*child_pointer = old_pointer;
+		((CUDA_child *) child->value)->old_pointer = old_CUDA_pointer;
+		child = child->next;
+	}
+	return parent->old_value;
+}
+
+void *CUDA_struct_pull(CUDA_struct *parent){
+	void *output;
+	output = _CUDA_struct_pull(parent);
+	_CUDA_struct_reset_freeing(parent);
+	return output;
+}
+
+void *_CUDA_struct_push(CUDA_struct *parent){
+	linked_list *child;
+	void **child_pointer;
+	void *old_pointer;
+	void *old_host_pointer;
+	CUDA_struct *child_struct;
+	
+	if(!parent->allocated){
+		fprintf(stderr, "Error: the CUDA_struct was never compiled. Compile it with void *new_struct = CUDA_struct_compile(my_CUDA_struct_pointer);");
+		exit(1);
+	}
+
+	if(parent->freeing){
+		return parent->value;
+	}
+
+	parent->freeing = 1;
+	
+	child = parent->children;
+	while(child != (linked_list *) 0){
+		old_pointer = ((CUDA_child *) child->value)->old_pointer;
+		child_pointer = ((CUDA_child *) child->value)->pointer;
+		child_struct = ((CUDA_child *) child->value)->struct_var;
+		
+		_CUDA_struct_push(child_struct);
+		old_host_pointer = *child_pointer;
+		*child_pointer = old_pointer;
+		((CUDA_child *) child->value)->old_pointer = old_host_pointer;
+		child = child->next;
+	}
+	cudaMemcpy(parent->value, parent->old_value, parent->size, cudaMemcpyHostToDevice);
+	return parent->value;
+}
+
+void *CUDA_struct_push(CUDA_struct *parent){
+	void *output;
+	output = _CUDA_struct_push(parent);
+	_CUDA_struct_reset_freeing(parent);
+	return output;
+}
+
 __global__ void CUDA_test(struct test *t, int *t_ans, int *t2_ans){
 	*t_ans = t->x + t->child->x;
 	*t2_ans = t->child->parent->child->x;
@@ -182,7 +278,6 @@ int main(){
 	cudaFree(t2_ans);	
 
 	printf("Freeing CUDA_struct...\n");
-
 	t = (test *) CUDA_struct_free(t_CUDA);
 
 	printf("Printing last error...\n");

@@ -40,3 +40,7 @@ void CUDA_struct_compile(CUDA_struct *parent);
 
 void *CUDA_struct_free(CUDA_struct *parent);
 
+void *CUDA_struct_pull(CUDA_struct *parent);
+
+void *CUDA_struct_push(CUDA_struct *parent);
+
