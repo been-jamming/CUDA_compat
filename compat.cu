@@ -219,7 +219,7 @@ __global__ void CUDA_test(struct test *t, int *t_ans, int *t2_ans){
 	*t2_ans = t->child->parent->child->x;
 }
 
-int main(){
+int test(){
 	struct test *t;
 	struct test *t2;
 
